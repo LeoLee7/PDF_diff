@@ -20,7 +20,7 @@ open pdf_diff_app.html
 ### Test Case
 
 ![alt text](/assets/test_case.jpg)
-This test case is created by a nervous Ph.D. student named Li.
+This test case is created by Li.
 <br>  
 
 
