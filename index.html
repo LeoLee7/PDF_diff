@@ -522,7 +522,7 @@ async function renderPage(pdf, pageNum, scale = 1.5) {
     return canvas;
 }
 
-function drawVisualDiff(baseCanvas, wordsWithBoxes, changedWordIndices, textColor, imgRegions, changedImgs, onlyImgs, imgColor) {
+function drawVisualDiff(baseCanvas, wordsWithBoxes, changedWordIndices, textColor, imgRegions, changedImgs, onlyImgs, imgColor, labelFontSize) {
     const result = document.createElement('canvas');
     result.width = baseCanvas.width; result.height = baseCanvas.height;
     const ctx = result.getContext('2d');
@@ -540,34 +540,56 @@ function drawVisualDiff(baseCanvas, wordsWithBoxes, changedWordIndices, textColo
     for (const idx of changedImgs) {
         const img = imgRegions[idx];
         if (!img) continue;
+        const pad = 6;
         ctx.strokeStyle = imgColor;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([6, 3]);
-        ctx.strokeRect(img.x, img.y, img.w, img.h);
+        ctx.lineWidth = 5;
+        ctx.setLineDash([10, 5]);
+        ctx.strokeRect(img.x - pad, img.y - pad, img.w + pad*2, img.h + pad*2);
         ctx.setLineDash([]);
         // Semi-transparent overlay
-        ctx.fillStyle = imgColor.replace('1)', '0.15)');
+        ctx.fillStyle = imgColor.replace('1)', '0.2)');
         ctx.fillRect(img.x, img.y, img.w, img.h);
-        // Label
-        ctx.fillStyle = imgColor;
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('CHANGED', img.x + 4, img.y + 14);
+        // Label badge at upper left
+        const labelText = 'IMAGE CHANGED';
+        const fs = labelFontSize || 24;
+        const bh = Math.round(fs * 1.5);
+        ctx.font = `bold ${Math.round(fs)}px sans-serif`;
+        const tw = ctx.measureText(labelText).width;
+        const badgeW = tw + 20, badgeH = bh;
+        const bx = img.x - pad, by = img.y - pad - badgeH;
+        ctx.fillStyle = imgColor.replace('1)', '0.9)');
+        ctx.beginPath();
+        ctx.roundRect(bx, by, badgeW, badgeH, 5);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(labelText, bx + 10, by + Math.round(fs * 1.1));
     }
 
     // Highlight images only in this version
     for (const idx of onlyImgs) {
         const img = imgRegions[idx];
         if (!img) continue;
+        const pad = 6;
         ctx.strokeStyle = imgColor;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([6, 3]);
-        ctx.strokeRect(img.x, img.y, img.w, img.h);
+        ctx.lineWidth = 5;
+        ctx.setLineDash([10, 5]);
+        ctx.strokeRect(img.x - pad, img.y - pad, img.w + pad*2, img.h + pad*2);
         ctx.setLineDash([]);
-        ctx.fillStyle = imgColor.replace('1)', '0.15)');
+        ctx.fillStyle = imgColor.replace('1)', '0.2)');
         ctx.fillRect(img.x, img.y, img.w, img.h);
-        ctx.fillStyle = imgColor;
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('NEW', img.x + 4, img.y + 14);
+        const labelText = 'NEW IMAGE';
+        const fs2 = labelFontSize || 24;
+        const bh2 = Math.round(fs2 * 1.5);
+        ctx.font = `bold ${Math.round(fs2)}px sans-serif`;
+        const tw = ctx.measureText(labelText).width;
+        const badgeW = tw + 20, badgeH = bh2;
+        const bx = img.x - pad, by = img.y - pad - badgeH;
+        ctx.fillStyle = imgColor.replace('1)', '0.9)');
+        ctx.beginPath();
+        ctx.roundRect(bx, by, badgeW, badgeH, 5);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(labelText, bx + 10, by + Math.round(fs2 * 1.1));
     }
 
     return result;
@@ -611,11 +633,23 @@ async function buildVisualDiffForPage(pdfA, pdfB, pageNum) {
     const { changedA: chImgA, changedB: chImgB, onlyA: onlyImgA, onlyB: onlyImgB } =
         matchImages(imgRegionsA, sigsA, imgRegionsB, sigsB);
 
+    // Compute dominant font size from text (most common height, rounded)
+    const allWords = wordsA.concat(wordsB);
+    let labelFontSize = 24; // fallback
+    if (allWords.length > 0) {
+        const heightCounts = {};
+        for (const w of allWords) {
+            const rh = Math.round(w.h);
+            heightCounts[rh] = (heightCounts[rh] || 0) + 1;
+        }
+        labelFontSize = +Object.entries(heightCounts).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
     // Draw results
     const diffCanvasA = drawVisualDiff(canvasA, wordsA, changedTextA, 'rgba(244,67,54,0.3)',
-        imgRegionsA, chImgA, onlyImgA, 'rgba(244,67,54,1)');
+        imgRegionsA, chImgA, onlyImgA, 'rgba(244,67,54,1)', labelFontSize);
     const diffCanvasB = drawVisualDiff(canvasB, wordsB, changedTextB, 'rgba(76,175,80,0.3)',
-        imgRegionsB, chImgB, onlyImgB, 'rgba(76,175,80,1)');
+        imgRegionsB, chImgB, onlyImgB, 'rgba(76,175,80,1)', labelFontSize);
 
     const diffCount = changedTextB.size + chImgB.size + onlyImgB.size;
     return { canvasA: diffCanvasA, canvasB: diffCanvasB, diffCount };
