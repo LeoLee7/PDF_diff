@@ -18,7 +18,12 @@ open pdf_diff_app.html
 <br>  
 
 ### Use it: Drop two PDFs and click Compare.  
+![alt text](/assets/upload.jpg)
 
+
+### Test Case
+
+![alt text](/assets/test_case.jpg)
 <br>  
 
 ## What It Does
