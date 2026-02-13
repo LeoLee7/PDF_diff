@@ -24,13 +24,11 @@ This test case is created by a nervous Ph.D. student named Li.
 <br>  
 
 
-<br>  
-
-### Use it: Drop two PDFs and click Compare.  
-![alt text](/assets/upload.jpg)
-
-
-
+## Known Limitations
+- The visual overlay highlights at the word level. For character-level precision, use the Text Diff tab.
+- PDF text extraction may occasionally split or merge words differently than expected, causing minor false positives.
+- It may also miss some changes entirely.
+- Large PDFs (50+ pages) may be slow since all processing runs in the browser.
 
 
 ## What It Does
@@ -55,8 +53,48 @@ A floating navigator (bottom right) lets you jump between pages with changes.
 ### Download
 Click "Download PDF" to generate a merged side-by-side report. Each page places the original and modified versions horizontally so you can share or print the comparison.
 
-## Known Limitations
-- The visual overlay highlights at the word level. For character-level precision, use the Text Diff tab.
-- PDF text extraction may occasionally split or merge words differently than expected, causing minor false positives.
-- It may also miss some changes entirely.
-- Large PDFs (50+ pages) may be slow since all processing runs in the browser.
+
+# How It Works
+
+> All processing runs locally in your browser. Nothing is uploaded.
+
+
+
+```
+┌───────── GitHub Pages (served once) ─────────┐
+│                                              │
+│      index.html + PDF.js + jsPDF             │
+│                                              │
+└───────────────────────┬──────────────────────┘
+                        │
+                        ▼
+┌─────── Local Browser (all processing) ───────┐
+│                                              │
+│      PDF.js: parse & render pages            │
+│             │              │                 │
+│             ▼              ▼                 │
+│       ┌──────────┐  ┌────────────┐           │
+│       │ LCS diff │  │ Canvas API │           │
+│       │ text     │  │ visual     │           │
+│       └────┬─────┘  └──────┬─────┘           │
+│            └───────┬───────┘                 │
+│                    ▼                         │
+│             View results                     │
+│                    │                         │
+│                    ▼                         │
+│             jsPDF: generate PDF              │
+│                                              │
+└────────┬───────────────────────────┬─────────┘
+         ▲                           │
+         │                           ▼
+┌────────┴───────────────────────────┴─────────┐
+│                                              │
+│    Drop two PDFs           Download PDF      │
+│    (input)                     (output)      │
+│                                              │
+└────────── User (local files only) ───────────┘
+```
+
+
+
+After the page loads, zero network requests are made. All processing happens in browser memory.
