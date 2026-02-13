@@ -54,7 +54,7 @@ A floating navigator (bottom right) lets you jump between pages with changes.
 Click "Download PDF" to generate a merged side-by-side report. Each page places the original and modified versions horizontally so you can share or print the comparison.
 
 ## Known Limitations
-
 - The visual overlay highlights at the word level. For character-level precision, use the Text Diff tab.
 - PDF text extraction may occasionally split or merge words differently than expected, causing minor false positives.
+- It may also miss some changes entirely.
 - Large PDFs (50+ pages) may be slow since all processing runs in the browser.
