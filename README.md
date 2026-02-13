@@ -6,16 +6,17 @@
 
 ## Usage
 
-### Option 1: Open locally
+### Option 1: GitHub Pages
+Use the link hosted by GitHub Pages: [link](https://leolee7.github.io/PDF_diff/)  
+### Option 2: Open locally
 ```
 git clone https://github.com/LeoLee7/PDF_diff.git
 cd PDF_diff
 open pdf_diff_app.html
 ```
 
-### Option 2: GitHub Pages
-Use the link hosted by GitHub Pages: [link](https://leolee7.github.io/PDF_diff/)
-<br>
+<br>  
+
 ### Use it: Drop two PDFs and click Compare.  
 
 <br>  
