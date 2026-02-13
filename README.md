@@ -17,17 +17,19 @@ cd PDF_diff
 open pdf_diff_app.html
 ```
 
+### Test Case
+
+![alt text](/assets/test_case.jpg)
+This test case is created by a nervous Ph.D. student named Li.
+<br>  
+
+
 <br>  
 
 ### Use it: Drop two PDFs and click Compare.  
 ![alt text](/assets/upload.jpg)
 
 
-### Test Case
-
-![alt text](/assets/test_case.jpg)
-This test case is created by a nervous Ph.D. student like me.
-<br>  
 
 
 
