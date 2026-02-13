@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Diff Tool</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #1e1e1e; color: #d4d4d4; min-height: 100vh;
+    }
+    #upload-screen {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; min-height: 100vh; padding: 40px;
+    }
+    #upload-screen h1 { font-size: 24px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+    #upload-screen .subtitle { font-size: 14px; color: #808080; margin-bottom: 40px; }
+    .upload-row { display: flex; gap: 32px; margin-bottom: 32px; flex-wrap: wrap; justify-content: center; }
+    .dropzone {
+        width: 340px; height: 220px; border: 2px dashed #3c3c3c; border-radius: 12px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        cursor: pointer; transition: all 0.2s; position: relative; background: #252526;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: #007acc; background: #1a2a3a; }
+    .dropzone.loaded { border-color: #4caf50; border-style: solid; }
+    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .dropzone .icon { font-size: 40px; margin-bottom: 12px; color: #555; }
+    .dropzone.loaded .icon { color: #4caf50; }
+    .dropzone .label { font-size: 14px; color: #808080; font-weight: 500; }
+    .dropzone .filename { font-size: 13px; color: #569cd6; margin-top: 8px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dropzone .role { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    #compare-btn {
+        padding: 12px 48px; font-size: 15px; font-weight: 600; background: #007acc; color: #fff;
+        border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s; opacity: 0.4; pointer-events: none;
+    }
+    #compare-btn.ready { opacity: 1; pointer-events: auto; }
+    #compare-btn.ready:hover { background: #005fa3; }
+    #compare-btn.processing { opacity: 0.6; pointer-events: none; }
+    .progress-bar { width: 340px; height: 4px; background: #333; border-radius: 2px; margin-top: 16px; overflow: hidden; display: none; }
+    .progress-bar.active { display: block; }
+    .progress-bar .fill { height: 100%; background: #007acc; border-radius: 2px; transition: width 0.3s; width: 0%; }
+    .status-text { font-size: 12px; color: #808080; margin-top: 8px; height: 18px; }
+
+    #diff-screen { display: none; }
+    .header { background: #252526; border-bottom: 1px solid #3c3c3c; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 14px; font-weight: 500; color: #cccccc; }
+    .header .file-names { font-size: 13px; color: #808080; }
+    .header .file-names span { color: #569cd6; }
+    .header .back-btn { padding: 4px 12px; font-size: 12px; background: #333; color: #ccc; border: 1px solid #555; border-radius: 4px; cursor: pointer; margin-left: auto; }
+    .header .back-btn:hover { background: #444; }
+    .tabs { display: flex; background: #2d2d2d; border-bottom: 1px solid #3c3c3c; }
+    .tab { padding: 10px 20px; cursor: pointer; border: none; background: transparent; color: #808080; font-size: 13px; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab:hover { color: #d4d4d4; }
+    .tab.active { color: #ffffff; border-bottom-color: #007acc; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .page-tabs { display: flex; gap: 4px; padding: 8px 16px; background: #252526; border-bottom: 1px solid #3c3c3c; flex-wrap: wrap; }
+    .page-tab { padding: 4px 12px; cursor: pointer; border: 1px solid #3c3c3c; background: transparent; color: #808080; font-size: 12px; border-radius: 3px; transition: all 0.15s; }
+    .page-tab:hover { color: #d4d4d4; border-color: #555; }
+    .page-tab.active { color: #ffffff; background: #007acc; border-color: #007acc; }
+    .diff-container { display: flex; gap: 0; height: calc(100vh - 140px); }
+    .diff-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #3c3c3c; }
+    .diff-panel:last-child { border-right: none; }
+    .panel-header { padding: 6px 12px; background: #2d2d2d; border-bottom: 1px solid #3c3c3c; font-size: 12px; color: #808080; font-weight: 500; }
+    .panel-body { flex: 1; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 22px; padding: 4px 0; }
+    .diff-line { padding: 1px 12px; white-space: pre-wrap; word-break: break-word; min-height: 22px; }
+    .diff-line.pad { background: rgba(128, 128, 128, 0.05); }
+    .diff-line.line-removed { background: rgba(244, 67, 54, 0.12); border-left: 3px solid #f44336; }
+    .diff-line.line-added { background: rgba(76, 175, 80, 0.12); border-left: 3px solid #4caf50; }
+    .char-removed { background: rgba(244, 67, 54, 0.45); color: #ffb0b0; border-radius: 1px; }
+    .char-added { background: rgba(76, 175, 80, 0.45); color: #b0ffb0; border-radius: 1px; }
+    .word-removed { background: rgba(244, 67, 54, 0.25); color: #f8a0a0; border-radius: 2px; padding: 0 1px; }
+    .word-added { background: rgba(76, 175, 80, 0.25); color: #a0f0a0; border-radius: 2px; padding: 0 1px; }
+
+    .visual-page { padding: 16px 24px; border-bottom: 1px solid #3c3c3c; }
+    .visual-page h3 { font-size: 14px; color: #cccccc; margin-bottom: 12px; font-weight: 500; }
+    .visual-row { display: flex; gap: 12px; }
+    .visual-col { flex: 1; min-width: 0; }
+    .visual-col h4 { font-size: 12px; color: #808080; margin-bottom: 6px; font-weight: 500; }
+    .visual-col img, .visual-col canvas { width: 100%; border: 1px solid #3c3c3c; border-radius: 4px; display: block; }
+
+    /* Diff navigator */
+    .diff-nav {
+        position: fixed; bottom: 24px; right: 24px; z-index: 100;
+        background: #252526; border: 1px solid #3c3c3c; border-radius: 8px;
+        padding: 8px 14px; display: flex; align-items: center; gap: 10px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: none;
+    }
+    .diff-nav.active { display: flex; }
+    .diff-nav button {
+        background: #007acc; color: #fff; border: none; border-radius: 4px;
+        padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600;
+        transition: background 0.15s;
+    }
+    .diff-nav button:hover { background: #005fa3; }
+    .diff-nav button:disabled { background: #333; color: #666; cursor: default; }
+    .diff-nav .counter { font-size: 13px; color: #ccc; min-width: 80px; text-align: center; }
+    .diff-nav .label { font-size: 11px; color: #808080; }
+
+    .diff-marker {
+        outline: 3px solid #ff0; outline-offset: 2px; border-radius: 3px;
+        scroll-margin-top: 80px;
+    }
+</style>
+</head>
+<body>
+<div id="upload-screen">
+    <h1>PDF Diff Tool</h1>
+    <p class="subtitle">Upload two PDFs to compare them side by side</p>
+    <div class="upload-row">
+        <div class="dropzone" id="drop-a"><div class="role">Original (A)</div><div class="icon">&#128196;</div><div class="label">Drop PDF here or click to browse</div><div class="filename" id="name-a"></div><input type="file" accept=".pdf" id="input-a"></div>
+        <div class="dropzone" id="drop-b"><div class="role">Modified (B)</div><div class="icon">&#128196;</div><div class="label">Drop PDF here or click to browse</div><div class="filename" id="name-b"></div><input type="file" accept=".pdf" id="input-b"></div>
+    </div>
+    <button id="compare-btn">Compare PDFs</button>
+    <div class="progress-bar" id="progress"><div class="fill" id="progress-fill"></div></div>
+    <div class="status-text" id="status-text"></div>
+</div>
+<div id="diff-screen">
+    <div class="header"><h1>PDF Diff</h1><div class="file-names"><span id="header-name-a"></span> &larr;&rarr; <span id="header-name-b"></span></div><button class="back-btn" id="back-btn">Upload New</button></div>
+    <div class="tabs"><button class="tab" data-target="text-diff">Text Diff</button><button class="tab active" data-target="visual-diff">Visual Diff</button></div>
+    <div class="tab-content" id="text-diff"><div class="page-tabs" id="text-page-tabs"></div><div id="text-page-panels"></div></div>
+    <div class="tab-content active" id="visual-diff"><div id="visual-pages"></div></div>
+    <div class="diff-nav" id="diff-nav">
+        <span class="label">Diffs</span>
+        <button id="nav-prev" title="Previous diff (&#8593;)">&larr; Prev</button>
+        <span class="counter" id="nav-counter">0 / 0</span>
+        <button id="nav-next" title="Next diff (&#8595;)">Next &rarr;</button>
+        <span style="border-left:1px solid #3c3c3c;height:20px;margin:0 4px"></span>
+        <button id="download-pdf" title="Download side-by-side PDF">Download PDF</button>
+    </div>
+</div>
+
+<script type="module">
+import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+let fileA = null, fileB = null;
+// Store diff canvases for PDF download
+let storedDiffPages = []; // [{canvasA, canvasB}, ...]
+
+// ==================== Upload ====================
+function setupDropzone(dropId, inputId, nameId, which) {
+    const drop = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+    const nameEl = document.getElementById(nameId);
+    function handleFile(file) {
+        if (!file || file.type !== 'application/pdf') return;
+        if (which === 'a') fileA = file; else fileB = file;
+        nameEl.textContent = file.name;
+        drop.classList.add('loaded');
+        document.getElementById('compare-btn').classList.toggle('ready', !!(fileA && fileB));
+    }
+    input.addEventListener('change', e => handleFile(e.target.files[0]));
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+}
+setupDropzone('drop-a', 'input-a', 'name-a', 'a');
+setupDropzone('drop-b', 'input-b', 'name-b', 'b');
+
+// ==================== LCS diff ====================
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function lcs(a, b) {
+    const m = a.length, n = b.length;
+    if (!m || !n) return [];
+    if (m * n > 2000000) return lcsGreedy(a, b);
+    const dp = [];
+    for (let i = 0; i <= m; i++) dp[i] = new Uint16Array(n + 1);
+    for (let i = 1; i <= m; i++)
+        for (let j = 1; j <= n; j++)
+            dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+    const res = [];
+    let i = m, j = n;
+    while (i > 0 && j > 0) {
+        if (a[i-1] === b[j-1]) { res.push([i-1, j-1]); i--; j--; }
+        else if (dp[i-1][j] >= dp[i][j-1]) i--;
+        else j--;
+    }
+    return res.reverse();
+}
+
+function lcsGreedy(a, b) {
+    const bMap = new Map();
+    b.forEach((v, i) => { if (!bMap.has(v)) bMap.set(v, []); bMap.get(v).push(i); });
+    const matches = [];
+    let lastJ = -1;
+    for (let i = 0; i < a.length; i++) {
+        const pos = bMap.get(a[i]);
+        if (pos) for (const j of pos) { if (j > lastJ) { matches.push([i, j]); lastJ = j; break; } }
+    }
+    return matches;
+}
+
+function diffOps(a, b) {
+    const matches = lcs(a, b);
+    const ops = [];
+    let ai = 0, bi = 0;
+    for (const [mi, mj] of matches) {
+        if (mi > ai && mj > bi) ops.push(['replace', ai, mi, bi, mj]);
+        else if (mi > ai) ops.push(['delete', ai, mi, bi, bi]);
+        else if (mj > bi) ops.push(['insert', ai, ai, bi, mj]);
+        ops.push(['equal', mi, mi+1, mj, mj+1]);
+        ai = mi+1; bi = mj+1;
+    }
+    if (ai < a.length && bi < b.length) ops.push(['replace', ai, a.length, bi, b.length]);
+    else if (ai < a.length) ops.push(['delete', ai, a.length, bi, bi]);
+    else if (bi < b.length) ops.push(['insert', ai, ai, bi, b.length]);
+    // Merge consecutive equal
+    const merged = [];
+    for (const op of ops) {
+        const last = merged[merged.length-1];
+        if (last && last[0] === 'equal' && op[0] === 'equal' && last[2] === op[1] && last[4] === op[3]) {
+            last[2] = op[2]; last[4] = op[4];
+        } else merged.push([...op]);
+    }
+    return merged;
+}
+
+// ==================== Character-level diff within a word ====================
+function charDiffHtml(wordA, wordB, clsRem, clsAdd) {
+    const charsA = [...wordA], charsB = [...wordB];
+    const ops = diffOps(charsA, charsB);
+    let htmlA = '', htmlB = '';
+    for (const [op, a1, a2, b1, b2] of ops) {
+        if (op === 'equal') {
+            htmlA += esc(charsA.slice(a1, a2).join(''));
+            htmlB += esc(charsB.slice(b1, b2).join(''));
+        } else if (op === 'replace') {
+            htmlA += `<span class="${clsRem}">${esc(charsA.slice(a1,a2).join(''))}</span>`;
+            htmlB += `<span class="${clsAdd}">${esc(charsB.slice(b1,b2).join(''))}</span>`;
+        } else if (op === 'delete') {
+            htmlA += `<span class="${clsRem}">${esc(charsA.slice(a1,a2).join(''))}</span>`;
+        } else if (op === 'insert') {
+            htmlB += `<span class="${clsAdd}">${esc(charsB.slice(b1,b2).join(''))}</span>`;
+        }
+    }
+    return { htmlA, htmlB };
+}
+
+// ==================== Word-level diff with char drill-down ====================
+function wordDiffLine(lineA, lineB) {
+    const tokA = lineA.match(/\S+|\s+/g) || [];
+    const tokB = lineB.match(/\S+|\s+/g) || [];
+    const normA = tokA.map(t => t.replace(/\s+/g, ' '));
+    const normB = tokB.map(t => t.replace(/\s+/g, ' '));
+    const ops = diffOps(normA, normB);
+    let lH = '', rH = '';
+
+    for (const [op, a1, a2, b1, b2] of ops) {
+        if (op === 'equal') {
+            for (let i = a1; i < a2; i++) lH += esc(tokA[i]);
+            for (let j = b1; j < b2; j++) rH += esc(tokB[j]);
+        } else if (op === 'replace') {
+            // Pair up words and do char-level diff within each pair
+            const cnt = Math.max(a2-a1, b2-b1);
+            for (let k = 0; k < cnt; k++) {
+                const wA = (a1+k < a2) ? tokA[a1+k] : null;
+                const wB = (b1+k < b2) ? tokB[b1+k] : null;
+                if (wA && wB && wA.trim() && wB.trim()) {
+                    const { htmlA, htmlB } = charDiffHtml(wA, wB, 'char-removed', 'char-added');
+                    lH += `<span class="word-removed">${htmlA}</span>`;
+                    rH += `<span class="word-added">${htmlB}</span>`;
+                } else if (wA) {
+                    lH += `<span class="word-removed">${esc(wA)}</span>`;
+                } else if (wB) {
+                    rH += `<span class="word-added">${esc(wB)}</span>`;
+                }
+            }
+        } else if (op === 'delete') {
+            for (let i = a1; i < a2; i++) lH += `<span class="word-removed">${esc(tokA[i])}</span>`;
+        } else if (op === 'insert') {
+            for (let j = b1; j < b2; j++) rH += `<span class="word-added">${esc(tokB[j])}</span>`;
+        }
+    }
+    return { lH, rH };
+}
+
+function buildPageDiff(linesA, linesB) {
+    const normA = linesA.map(l => l.replace(/\s+/g,' ').trim());
+    const normB = linesB.map(l => l.replace(/\s+/g,' ').trim());
+    const ops = diffOps(normA, normB);
+    let leftH = '', rightH = '';
+    for (const [op, a1, a2, b1, b2] of ops) {
+        if (op === 'equal') {
+            for (let i = a1; i < a2; i++) leftH += `<div class="diff-line">${esc(linesA[i])}&nbsp;</div>`;
+            for (let j = b1; j < b2; j++) rightH += `<div class="diff-line">${esc(linesB[j])}&nbsp;</div>`;
+        } else if (op === 'replace') {
+            const cnt = Math.max(a2-a1, b2-b1);
+            for (let k = 0; k < cnt; k++) {
+                const la = (a1+k < a2) ? linesA[a1+k] : null;
+                const lb = (b1+k < b2) ? linesB[b1+k] : null;
+                if (la !== null && lb !== null) {
+                    const { lH, rH } = wordDiffLine(la, lb);
+                    leftH += `<div class="diff-line line-removed">${lH}&nbsp;</div>`;
+                    rightH += `<div class="diff-line line-added">${rH}&nbsp;</div>`;
+                } else if (la !== null) {
+                    leftH += `<div class="diff-line line-removed">${esc(la)}&nbsp;</div>`;
+                    rightH += `<div class="diff-line pad">&nbsp;</div>`;
+                } else {
+                    leftH += `<div class="diff-line pad">&nbsp;</div>`;
+                    rightH += `<div class="diff-line line-added">${esc(lb)}&nbsp;</div>`;
+                }
+            }
+        } else if (op === 'delete') {
+            for (let i = a1; i < a2; i++) leftH += `<div class="diff-line line-removed">${esc(linesA[i])}&nbsp;</div>`;
+            for (let k = 0; k < a2-a1; k++) rightH += `<div class="diff-line pad">&nbsp;</div>`;
+        } else if (op === 'insert') {
+            for (let k = 0; k < b2-b1; k++) leftH += `<div class="diff-line pad">&nbsp;</div>`;
+            for (let j = b1; j < b2; j++) rightH += `<div class="diff-line line-added">${esc(linesB[j])}&nbsp;</div>`;
+        }
+    }
+    return { leftHtml: leftH, rightHtml: rightH };
+}
+
+// ==================== PDF extraction ====================
+async function extractTextByPage(arrayBuffer) {
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const lineMap = new Map();
+        for (const item of content.items) {
+            if (!item.str) continue;
+            const y = Math.round(item.transform[5] / 2) * 2;
+            if (!lineMap.has(y)) lineMap.set(y, []);
+            lineMap.get(y).push({ x: item.transform[4], str: item.str });
+        }
+        const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+        const lines = sortedYs.map(y => {
+            return lineMap.get(y).sort((a,b) => a.x - b.x).map(it => it.str).join(' ').trim();
+        }).filter(l => l.length > 0);
+        pages.push(lines);
+    }
+    return { pdf, pages };
+}
+
+async function extractWordsWithBoxes(pdf, pageNum) {
+    const page = await pdf.getPage(pageNum);
+    const vp = page.getViewport({ scale: 1.5 });
+    const content = await page.getTextContent();
+    const words = [];
+    for (const item of content.items) {
+        if (!item.str || !item.str.trim()) continue;
+        const tx = pdfjsLib.Util.transform(vp.transform, item.transform);
+        const totalW = item.width * vp.scale;
+        const h = item.height * vp.scale;
+        const baseX = tx[4];
+        const baseY = tx[5] - h;
+        // Split multi-word items into individual words with estimated bounding boxes
+        const str = item.str;
+        const totalChars = str.length;
+        if (totalChars === 0) continue;
+        const charWidth = totalW / totalChars;
+        // Find word boundaries (non-space runs)
+        const wordRegex = /\S+/g;
+        let match;
+        while ((match = wordRegex.exec(str)) !== null) {
+            const wordStart = match.index;
+            const word = match[0];
+            const wx = baseX + wordStart * charWidth;
+            const ww = word.length * charWidth;
+            words.push({ text: word, x: wx, y: baseY, w: ww, h });
+        }
+    }
+    return words;
+}
+
+// ==================== Image region extraction ====================
+function composeMatrix(m1, m2) {
+    return [
+        m1[0]*m2[0] + m1[2]*m2[1],
+        m1[1]*m2[0] + m1[3]*m2[1],
+        m1[0]*m2[2] + m1[2]*m2[3],
+        m1[1]*m2[2] + m1[3]*m2[3],
+        m1[0]*m2[4] + m1[2]*m2[5] + m1[4],
+        m1[1]*m2[4] + m1[3]*m2[5] + m1[5]
+    ];
+}
+
+async function extractImageRegions(pdf, pageNum, scale) {
+    const page = await pdf.getPage(pageNum);
+    const vp = page.getViewport({ scale });
+    const opList = await page.getOperatorList();
+    const OPS = pdfjsLib.OPS;
+
+    const images = [];
+    let ctm = [1,0,0,1,0,0];
+    const stack = [];
+
+    for (let i = 0; i < opList.fnArray.length; i++) {
+        const fn = opList.fnArray[i];
+        const args = opList.argsArray[i];
+
+        if (fn === OPS.save) {
+            stack.push(ctm.slice());
+        } else if (fn === OPS.restore) {
+            ctm = stack.length > 0 ? stack.pop() : [1,0,0,1,0,0];
+        } else if (fn === OPS.transform) {
+            ctm = composeMatrix(ctm, args);
+        } else if (fn === OPS.paintImageXObject || fn === OPS.paintImageXObjectRepeat) {
+            // Image is in unit square [0,1]x[0,1], CTM maps it to page coords
+            // Corners in page coords
+            const corners = [[0,0],[1,0],[0,1],[1,1]].map(([px,py]) => [
+                ctm[0]*px + ctm[2]*py + ctm[4],
+                ctm[1]*px + ctm[3]*py + ctm[5]
+            ]);
+            // Convert to viewport coords
+            const vpCorners = corners.map(([px,py]) => [
+                vp.transform[0]*px + vp.transform[2]*py + vp.transform[4],
+                vp.transform[1]*px + vp.transform[3]*py + vp.transform[5]
+            ]);
+            const xs = vpCorners.map(c => c[0]);
+            const ys = vpCorners.map(c => c[1]);
+            const bbox = {
+                x: Math.min(...xs), y: Math.min(...ys),
+                w: Math.max(...xs) - Math.min(...xs),
+                h: Math.max(...ys) - Math.min(...ys),
+                name: args[0]
+            };
+            // Only meaningful images (skip tiny icons)
+            if (bbox.w > 30 && bbox.h > 30) {
+                images.push(bbox);
+            }
+        }
+    }
+    return images;
+}
+
+// Crop a region from a canvas and return pixel data as a flat array
+function cropCanvasRegion(canvas, bbox) {
+    const ctx = canvas.getContext('2d');
+    const x = Math.max(0, Math.round(bbox.x));
+    const y = Math.max(0, Math.round(bbox.y));
+    const w = Math.min(canvas.width - x, Math.round(bbox.w));
+    const h = Math.min(canvas.height - y, Math.round(bbox.h));
+    if (w <= 0 || h <= 0) return null;
+    return { data: ctx.getImageData(x, y, w, h), x, y, w, h };
+}
+
+// Downscale image data to a thumbnail for comparison
+function thumbnailSignature(imageData, size = 16) {
+    const { data, width, height } = imageData;
+    const sig = new Float32Array(size * size * 3);
+    const sx = width / size, sy = height / size;
+    for (let ty = 0; ty < size; ty++) {
+        for (let tx = 0; tx < size; tx++) {
+            let r = 0, g = 0, b = 0, cnt = 0;
+            const x0 = Math.floor(tx * sx), x1 = Math.min(width, Math.ceil((tx+1) * sx));
+            const y0 = Math.floor(ty * sy), y1 = Math.min(height, Math.ceil((ty+1) * sy));
+            for (let py = y0; py < y1; py++) {
+                for (let px = x0; px < x1; px++) {
+                    const idx = (py * width + px) * 4;
+                    r += data[idx]; g += data[idx+1]; b += data[idx+2]; cnt++;
+                }
+            }
+            if (cnt > 0) {
+                const si = (ty * size + tx) * 3;
+                sig[si] = r/cnt; sig[si+1] = g/cnt; sig[si+2] = b/cnt;
+            }
+        }
+    }
+    return sig;
+}
+
+// Compare two signatures, return similarity 0-1
+function compareSigs(sigA, sigB) {
+    let diff = 0;
+    for (let i = 0; i < sigA.length; i++) diff += Math.abs(sigA[i] - sigB[i]);
+    const maxDiff = sigA.length * 255;
+    return 1 - diff / maxDiff;
+}
+
+// Match images between two pages by content similarity
+function matchImages(imgsA, sigsA, imgsB, sigsB) {
+    const matchedA = new Set(), matchedB = new Set();
+    const changedA = new Set(), changedB = new Set();
+    const onlyA = new Set(), onlyB = new Set();
+
+    // Build similarity matrix
+    const simMatrix = [];
+    for (let i = 0; i < sigsA.length; i++) {
+        simMatrix[i] = [];
+        for (let j = 0; j < sigsB.length; j++) {
+            simMatrix[i][j] = compareSigs(sigsA[i], sigsB[j]);
+        }
+    }
+
+    // Greedy matching: pick best pairs first
+    const pairs = [];
+    for (let i = 0; i < sigsA.length; i++)
+        for (let j = 0; j < sigsB.length; j++)
+            pairs.push({ i, j, sim: simMatrix[i][j] });
+    pairs.sort((a, b) => b.sim - a.sim);
+
+    for (const { i, j, sim } of pairs) {
+        if (matchedA.has(i) || matchedB.has(j)) continue;
+        if (sim < 0.5) break; // Too different to be the same image
+        matchedA.add(i); matchedB.add(j);
+        if (sim < 0.95) { // Same image but content changed
+            changedA.add(i);
+            changedB.add(j);
+        }
+    }
+
+    // Unmatched = only in one version
+    for (let i = 0; i < sigsA.length; i++) if (!matchedA.has(i)) onlyA.add(i);
+    for (let j = 0; j < sigsB.length; j++) if (!matchedB.has(j)) onlyB.add(j);
+
+    return { changedA, changedB, onlyA, onlyB };
+}
+
+// ==================== Visual diff rendering ====================
+async function renderPage(pdf, pageNum, scale = 1.5) {
+    const page = await pdf.getPage(pageNum);
+    const vp = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    return canvas;
+}
+
+function drawVisualDiff(baseCanvas, wordsWithBoxes, changedWordIndices, textColor, imgRegions, changedImgs, onlyImgs, imgColor) {
+    const result = document.createElement('canvas');
+    result.width = baseCanvas.width; result.height = baseCanvas.height;
+    const ctx = result.getContext('2d');
+    ctx.drawImage(baseCanvas, 0, 0);
+
+    // Highlight changed words
+    ctx.fillStyle = textColor;
+    for (const idx of changedWordIndices) {
+        const w = wordsWithBoxes[idx];
+        if (!w) continue;
+        ctx.fillRect(w.x - 2, w.y - 2, w.w + 4, w.h + 4);
+    }
+
+    // Highlight changed images with a border
+    for (const idx of changedImgs) {
+        const img = imgRegions[idx];
+        if (!img) continue;
+        ctx.strokeStyle = imgColor;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(img.x, img.y, img.w, img.h);
+        ctx.setLineDash([]);
+        // Semi-transparent overlay
+        ctx.fillStyle = imgColor.replace('1)', '0.15)');
+        ctx.fillRect(img.x, img.y, img.w, img.h);
+        // Label
+        ctx.fillStyle = imgColor;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('CHANGED', img.x + 4, img.y + 14);
+    }
+
+    // Highlight images only in this version
+    for (const idx of onlyImgs) {
+        const img = imgRegions[idx];
+        if (!img) continue;
+        ctx.strokeStyle = imgColor;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 3]);
+        ctx.strokeRect(img.x, img.y, img.w, img.h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = imgColor.replace('1)', '0.15)');
+        ctx.fillRect(img.x, img.y, img.w, img.h);
+        ctx.fillStyle = imgColor;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('NEW', img.x + 4, img.y + 14);
+    }
+
+    return result;
+}
+
+async function buildVisualDiffForPage(pdfA, pdfB, pageNum) {
+    const scale = 1.5;
+
+    // Extract text words and image regions
+    const [wordsA, wordsB, imgRegionsA, imgRegionsB, canvasA, canvasB] = await Promise.all([
+        extractWordsWithBoxes(pdfA, pageNum),
+        extractWordsWithBoxes(pdfB, pageNum),
+        extractImageRegions(pdfA, pageNum, scale),
+        extractImageRegions(pdfB, pageNum, scale),
+        renderPage(pdfA, pageNum, scale),
+        renderPage(pdfB, pageNum, scale),
+    ]);
+
+    // --- Text diff ---
+    const textsA = wordsA.map(w => w.text.toLowerCase());
+    const textsB = wordsB.map(w => w.text.toLowerCase());
+    const textOps = diffOps(textsA, textsB);
+    const changedTextA = new Set(), changedTextB = new Set();
+    for (const [op, a1, a2, b1, b2] of textOps) {
+        if (op !== 'equal') {
+            for (let i = a1; i < a2; i++) changedTextA.add(i);
+            for (let j = b1; j < b2; j++) changedTextB.add(j);
+        }
+    }
+
+    // --- Image diff ---
+    const sigsA = [], sigsB = [];
+    for (const img of imgRegionsA) {
+        const crop = cropCanvasRegion(canvasA, img);
+        sigsA.push(crop ? thumbnailSignature(crop.data) : new Float32Array(16*16*3));
+    }
+    for (const img of imgRegionsB) {
+        const crop = cropCanvasRegion(canvasB, img);
+        sigsB.push(crop ? thumbnailSignature(crop.data) : new Float32Array(16*16*3));
+    }
+    const { changedA: chImgA, changedB: chImgB, onlyA: onlyImgA, onlyB: onlyImgB } =
+        matchImages(imgRegionsA, sigsA, imgRegionsB, sigsB);
+
+    // Draw results
+    const diffCanvasA = drawVisualDiff(canvasA, wordsA, changedTextA, 'rgba(244,67,54,0.3)',
+        imgRegionsA, chImgA, onlyImgA, 'rgba(244,67,54,1)');
+    const diffCanvasB = drawVisualDiff(canvasB, wordsB, changedTextB, 'rgba(76,175,80,0.3)',
+        imgRegionsB, chImgB, onlyImgB, 'rgba(76,175,80,1)');
+
+    const diffCount = changedTextB.size + chImgB.size + onlyImgB.size;
+    return { canvasA: diffCanvasA, canvasB: diffCanvasB, diffCount };
+}
+
+// ==================== Main ====================
+async function runComparison() {
+    const btn = document.getElementById('compare-btn');
+    const progress = document.getElementById('progress');
+    const fill = document.getElementById('progress-fill');
+    const status = document.getElementById('status-text');
+    btn.classList.add('processing'); btn.textContent = 'Processing...';
+    progress.classList.add('active');
+
+    try {
+        status.textContent = 'Reading PDFs...'; fill.style.width = '10%';
+        const bufA = await fileA.arrayBuffer();
+        const bufB = await fileB.arrayBuffer();
+
+        status.textContent = 'Extracting text...'; fill.style.width = '20%';
+        const [resA, resB] = await Promise.all([
+            extractTextByPage(bufA.slice(0)),
+            extractTextByPage(bufB.slice(0)),
+        ]);
+        const pdfA = await pdfjsLib.getDocument({ data: bufA.slice(0) }).promise;
+        const pdfB = await pdfjsLib.getDocument({ data: bufB.slice(0) }).promise;
+
+        status.textContent = 'Computing diffs...'; fill.style.width = '40%';
+        const maxPages = Math.max(pdfA.numPages, pdfB.numPages);
+        const tabsEl = document.getElementById('text-page-tabs');
+        const panelsEl = document.getElementById('text-page-panels');
+        tabsEl.innerHTML = ''; panelsEl.innerHTML = '';
+
+        for (let i = 0; i < maxPages; i++) {
+            const lA = resA.pages[i] || [], lB = resB.pages[i] || [];
+            const { leftHtml, rightHtml } = buildPageDiff(lA, lB);
+            tabsEl.innerHTML += `<button class="page-tab ${i===0?'active':''}" data-page="${i+1}">Page ${i+1}</button>`;
+            panelsEl.innerHTML += `
+                <div class="diff-container" id="text-page-${i+1}" style="display:${i===0?'flex':'none'}">
+                    <div class="diff-panel"><div class="panel-header">${esc(fileA.name)}</div><div class="panel-body">${leftHtml}</div></div>
+                    <div class="diff-panel"><div class="panel-header">${esc(fileB.name)}</div><div class="panel-body">${rightHtml}</div></div>
+                </div>`;
+        }
+
+        const visualEl = document.getElementById('visual-pages');
+        visualEl.innerHTML = '';
+        storedDiffPages = [];
+        let diffCount = 0;
+        for (let i = 0; i < maxPages; i++) {
+            status.textContent = `Visual diff page ${i+1}/${maxPages}...`;
+            fill.style.width = `${40 + ((i+1)/maxPages)*55}%`;
+
+            let colAH, colBH, pageDiffs = 0;
+            let diffCA = null, diffCB = null;
+            if (i < pdfA.numPages && i < pdfB.numPages) {
+                const result = await buildVisualDiffForPage(pdfA, pdfB, i+1);
+                diffCA = result.canvasA; diffCB = result.canvasB;
+                colAH = `<h4>${esc(fileA.name)} (removed in red)</h4><img src="${diffCA.toDataURL()}">`;
+                colBH = `<h4>${esc(fileB.name)} (added in green)</h4><img src="${diffCB.toDataURL()}">`;
+                pageDiffs = result.diffCount || 0;
+            } else if (i < pdfA.numPages) {
+                diffCA = await renderPage(pdfA, i+1);
+                colAH = `<h4>${esc(fileA.name)}</h4><img src="${diffCA.toDataURL()}">`;
+                colBH = `<h4>${esc(fileB.name)}</h4><div style="padding:40px;color:#555;text-align:center">Page not present</div>`;
+                pageDiffs = 1;
+            } else {
+                diffCB = await renderPage(pdfB, i+1);
+                colAH = `<h4>${esc(fileA.name)}</h4><div style="padding:40px;color:#555;text-align:center">Page not present</div>`;
+                colBH = `<h4>${esc(fileB.name)}</h4><img src="${diffCB.toDataURL()}">`;
+                pageDiffs = 1;
+            }
+            storedDiffPages.push({ canvasA: diffCA, canvasB: diffCB });
+            const section = document.createElement('div');
+            section.className = 'visual-page';
+            // Add diff-marker for pages that have changes
+            if (pageDiffs > 0) {
+                diffCount++;
+                section.setAttribute('data-diff-idx', diffCount);
+                section.classList.add('diff-marker');
+            }
+            section.innerHTML = `<h3>Page ${i+1}${pageDiffs > 0 ? ` <span style="font-size:12px;color:#007acc;font-weight:400">(${pageDiffs} change${pageDiffs>1?'s':''})</span>` : ''}</h3><div class="visual-row"><div class="visual-col">${colAH}</div><div class="visual-col">${colBH}</div></div>`;
+            visualEl.appendChild(section);
+        }
+        // Store total diffs for navigation
+        window._totalDiffs = diffCount;
+        window._currentDiff = 0;
+
+        fill.style.width = '100%';
+        document.getElementById('header-name-a').textContent = fileA.name;
+        document.getElementById('header-name-b').textContent = fileB.name;
+        document.getElementById('upload-screen').style.display = 'none';
+        document.getElementById('diff-screen').style.display = 'block';
+        wireUp();
+        setupDiffNav();
+    } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+        console.error(err);
+    }
+    btn.classList.remove('processing'); btn.textContent = 'Compare PDFs';
+    progress.classList.remove('active'); fill.style.width = '0%';
+}
+
+function wireUp() {
+    document.querySelectorAll('#diff-screen .tab').forEach(tab => {
+        tab.onclick = () => {
+            document.querySelectorAll('#diff-screen .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#diff-screen .tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(tab.dataset.target).classList.add('active');
+        };
+    });
+    document.querySelectorAll('.page-tab').forEach(tab => {
+        tab.onclick = () => {
+            document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.diff-container').forEach(c => c.style.display = 'none');
+            tab.classList.add('active');
+            document.getElementById('text-page-' + tab.dataset.page).style.display = 'flex';
+        };
+    });
+    document.querySelectorAll('.diff-container').forEach(container => {
+        const panels = container.querySelectorAll('.panel-body');
+        if (panels.length === 2) {
+            let syncing = false;
+            panels.forEach((panel, idx) => {
+                panel.onscroll = () => { if (syncing) return; syncing = true; panels[1-idx].scrollTop = panel.scrollTop; syncing = false; };
+            });
+        }
+    });
+}
+
+function setupDiffNav() {
+    const nav = document.getElementById('diff-nav');
+    const counter = document.getElementById('nav-counter');
+    const prevBtn = document.getElementById('nav-prev');
+    const nextBtn = document.getElementById('nav-next');
+    const total = window._totalDiffs || 0;
+
+    if (total === 0) { nav.classList.remove('active'); return; }
+    nav.classList.add('active');
+    window._currentDiff = 0;
+    updateNavCounter();
+
+    function updateNavCounter() {
+        const cur = window._currentDiff;
+        counter.textContent = cur === 0 ? `${total} diff${total>1?'s':''}` : `${cur} / ${total}`;
+        prevBtn.disabled = cur <= 1;
+        nextBtn.disabled = cur >= total;
+    }
+
+    function goToDiff(idx) {
+        if (idx < 1 || idx > total) return;
+        window._currentDiff = idx;
+        updateNavCounter();
+        const el = document.querySelector(`[data-diff-idx="${idx}"]`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Brief flash highlight
+            el.style.outline = '3px solid #ff0';
+            el.style.outlineOffset = '4px';
+            setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 1500);
+        }
+    }
+
+    prevBtn.onclick = () => goToDiff(window._currentDiff - 1);
+    nextBtn.onclick = () => goToDiff(window._currentDiff + 1);
+
+    // Keyboard shortcuts
+    document.onkeydown = (e) => {
+        if (document.getElementById('diff-screen').style.display === 'none') return;
+        if (e.key === 'ArrowDown' || e.key === 'j') {
+            e.preventDefault();
+            goToDiff((window._currentDiff || 0) + 1);
+        } else if (e.key === 'ArrowUp' || e.key === 'k') {
+            e.preventDefault();
+            goToDiff((window._currentDiff || 0) - 1);
+        }
+    };
+}
+
+// ==================== Download merged PDF ====================
+async function downloadDiffPdf() {
+    if (storedDiffPages.length === 0) return;
+    const btn = document.getElementById('download-pdf');
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+
+    // Dynamically load jsPDF
+    if (!window.jspdf) {
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+            s.onload = resolve; s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
+    const { jsPDF } = window.jspdf;
+
+    // Determine page size from first available canvas
+    const firstPage = storedDiffPages[0];
+    const sampleCanvas = firstPage.canvasA || firstPage.canvasB;
+    const cw = sampleCanvas.width, ch = sampleCanvas.height;
+
+    // Side-by-side: 2 * width, same height, with a small gap
+    const gap = 20;
+    const mergedW = cw * 2 + gap;
+    const mergedH = ch;
+
+    // Create PDF in landscape, size matching the merged canvas
+    // Convert pixels to mm (assuming 96 DPI for screen)
+    const pxToMm = 25.4 / 96;
+    const pageW = mergedW * pxToMm;
+    const pageH = mergedH * pxToMm;
+
+    const pdf = new jsPDF({ orientation: pageW > pageH ? 'l' : 'p', unit: 'mm', format: [pageW, pageH] });
+
+    for (let i = 0; i < storedDiffPages.length; i++) {
+        if (i > 0) pdf.addPage([pageW, pageH], pageW > pageH ? 'l' : 'p');
+
+        const { canvasA, canvasB } = storedDiffPages[i];
+
+        // Create merged canvas
+        const merged = document.createElement('canvas');
+        merged.width = mergedW; merged.height = mergedH;
+        const ctx = merged.getContext('2d');
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, mergedW, mergedH);
+
+        if (canvasA) ctx.drawImage(canvasA, 0, 0);
+        else { ctx.fillStyle = '#eee'; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = '#999'; ctx.font = '20px sans-serif'; ctx.fillText('Not present', 40, ch/2); }
+
+        // Draw separator
+        ctx.fillStyle = '#666';
+        ctx.fillRect(cw, 0, gap, mergedH);
+
+        if (canvasB) ctx.drawImage(canvasB, cw + gap, 0);
+        else { ctx.fillStyle = '#eee'; ctx.fillRect(cw + gap, 0, cw, ch); ctx.fillStyle = '#999'; ctx.font = '20px sans-serif'; ctx.fillText('Not present', cw + gap + 40, ch/2); }
+
+        // Add labels
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, 160, 28);
+        ctx.fillRect(cw + gap, 0, 160, 28);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`Page ${i+1} - Original`, 8, 19);
+        ctx.fillText(`Page ${i+1} - Modified`, cw + gap + 8, 19);
+
+        const imgData = merged.toDataURL('image/jpeg', 0.92);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+    }
+
+    pdf.save('pdf-diff-report.pdf');
+    btn.textContent = 'Download PDF';
+    btn.disabled = false;
+}
+
+document.getElementById('download-pdf').addEventListener('click', downloadDiffPdf);
+document.getElementById('compare-btn').addEventListener('click', () => { if (fileA && fileB) runComparison(); });
+document.getElementById('back-btn').addEventListener('click', () => {
+    document.getElementById('diff-screen').style.display = 'none';
+    document.getElementById('upload-screen').style.display = 'flex';
+    document.getElementById('diff-nav').classList.remove('active');
+});
+</script>
+</body>
+</html>
