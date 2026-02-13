@@ -22,7 +22,7 @@ open pdf_diff_app.html
 ![alt text](/assets/test_case.jpg)
 This test case is created by Li.
 <br>  
-
+![Image](https://github.com/user-attachments/assets/10170e3a-dc3f-48d2-8113-2856ce09be24)
 
 ## Known Limitations
 - The visual overlay highlights at the word level. For character-level precision, use the Text Diff tab.
