@@ -4,6 +4,8 @@
 - Fast, easy, and free
 - Files are processed locally in your browser -- nothing is uploaded or saved
 
+> **Disclaimer:** Please do not fully rely on this tool as it has limitations. If you find any issues or have ideas for improvement, feel free to contribute. PRs are welcome!
+
 ## Usage
 
 ### Option 1: GitHub Pages
@@ -24,7 +26,10 @@ open pdf_diff_app.html
 ### Test Case
 
 ![alt text](/assets/test_case.jpg)
+This test case is created by a nervous Ph.D. student like me.
 <br>  
+
+
 
 ## What It Does
 
